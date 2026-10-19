@@ -1,0 +1,42 @@
+{
+  "skill_name": "invest-workflow",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "/invest-workflow 分析下 MiniMax (00100.HK) 的买入价格，结合最新财报、现金储备和逆向 DCF 给出估值标尺与认错条件。",
+      "expected_output": "顶部注明数据口径，梳理行情位置与历史定增/IPO锚点，核验财报现金垫与附注疑点，通过 invest_tool.py 运行稳态归一化逆向 DCF 与 5x5 敏感性矩阵，给出分层价格标尺与 3 条可量化 Kill Criteria。",
+      "files": [],
+      "expectations": [
+        "顶部单行明确标注：标的、市场与币种、数据截止日、财报期、复权与会计口径（IFRS/Non-IFRS）。",
+        "识别当期实际自由现金流（FCF）为负的事实，不直接用负数套用标准 DCF，而是说明归一化稳态 FCF 假设并调用 scripts/invest_tool.py dcf 输出隐含复合增速与 5x5 敏感性矩阵。",
+        "对比 IPO 发行价、再融资配售价/可转债转股价及每股净现金安全垫，给出分层买入价格标尺而非替用户盲目拍板。",
+        "指出需回查原始财报附注的具体章节（如合同负债/递延收入、应收账款账龄、可转债条款或股份支付 SBC）。",
+        "结尾强制包含承重墙假设、事前验尸（Pre-mortem）以及 3 条未来 1-2 个季度内可量化、可验证的 Kill Criteria。"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "/invest-workflow 帮我体检一下当前持仓的集中度和隐形风险暴露：NVDA 25%、CEG 15%、VRT 15%、AAPL 25%、BRK.B 20%。",
+      "expected_output": "调用 scripts/invest_tool.py portfolio 计算 HHI 与有效持仓数 N_eff，对比表面行业分布与底层驱动因子暴露，识别跨行业同押 AI 资本开支的伪分散预警。",
+      "files": [],
+      "expectations": [
+        "调用确定性脚本 scripts/invest_tool.py portfolio 而非心算权重与 HHI。",
+        "准确输出持仓数量、有效分散持仓数 N_eff、HHI 指数以及 Top 1/3/5 集中度。",
+        "区分表面行业分类（半导体、公用事业、工业设备）与底层驱动因子（AI 资本开支）。",
+        "对合计占比达 55% 且跨 3 个行业的 AI 资本开支因子发出伪分散（Disguised Concentration）预警。"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "/invest-workflow 拆解某公司本季业绩会：管理层称‘受阶段性战略投入及客户决策周期拉长影响，利润率短期承压，但整体符合内部预期’，请结合财报排雷并给出证伪指标。",
+      "expected_output": "运用模块 2 与模块 3 将管理层官话翻译为财务核查项（销售/研发费用率、CapEx、RPO/合同负债、三个月前 Guidance 对比），列出 Q&A 追问清单与 3 条量化 Kill Criteria。",
+      "files": [],
+      "expectations": [
+        "将‘阶段性加大战略投入’与销售费用率/CapEx 增速及下季指引是否同步上调做交叉核验。",
+        "将‘客户决策周期拉长’对应到递延收入（合同负债）、剩余履约义务（RPO）或应收账款周转天数变动。",
+        "对比上季度定量 Guidance 中枢检验‘符合内部预期’是贴上限还是擦下限，并构建 Q&A 答非所问检测表。",
+        "给出 3 条可观测、可量化的财务或经营认错阈值（Kill Criteria），不输出空洞口号。"
+      ]
+    }
+  ]
+}

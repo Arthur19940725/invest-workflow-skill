@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*.pyd
+*.skill
+decision-journal/
+invest-workflow-workspace/
+**/iteration-*/
+**/outputs/
+**/*timing*.json
+**/*token*.json
+**/*grading*.json
+**/review*.html
+**/benchmark.json
+**/benchmark.md
+**/eval_metadata.json
