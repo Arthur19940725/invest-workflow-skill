@@ -1,79 +1,92 @@
 ---
 name: invest-workflow
-description: "Use only when the user explicitly invokes invest-workflow or ARTi, or asks to archive or review an investment decision journal (建档留存 / 复盘留档), stress-test a thesis with pre-mortem Kill Criteria (唱反调证伪), or audit a portfolio for hidden single-factor concentration (伪分散 / 底层驱动因子穿透). Its modules also cover quotes, fundamentals, earnings calls, and Reverse-DCF, but general stock research, valuation, earnings, and price-zone questions belong to stock-analysis."
+description: "Evidence-first ARTi research workflow with deterministic Reverse-DCF, portfolio-concentration and decision-journal scripts. Use only when the user explicitly invokes invest-workflow or ARTi, or asks to archive or review an investment decision journal (建档留存 / 复盘留档), stress-test a thesis with pre-mortem Kill Criteria (唱反调证伪), or audit a portfolio for hidden single-factor concentration (伪分散 / 底层驱动因子穿透). General stock research, valuation, earnings, and price-zone questions belong to stock-analysis."
 ---
 
-# Invest Workflow (ARTi 7-in-1 投研工作流)
+# Invest Workflow（ARTi 投研工作流）
 
-## 核心铁律（人机边界）
+这是流程工具，不是决策工具：**数据归工具，计算归脚本，语义归你，拍板归用户。**
 
-> **它是流程工具，不是决策工具。确定性归代码与数据，语义归大模型，拍板归人。**
+## 核心原则（附原因）
 
-1. **严禁伪造数据**：股价、市值、财报数字、业绩会原文必须来自实时检索、API/MCP 工具或用户提供的材料；缺失字段一律标 `N/A` 并说明原因。
-2. **严禁越界替用户拍板**：不输出空洞的“强烈推荐买入/卖出”。只输出：**结构化事实、隐含假设、反方证伪条件（Kill Criteria）**。
-3. **计算走脚本，不靠心算**：涉及 DCF 折现、逆向 DCF 隐含增速、敏感性矩阵、持仓 HHI 与风险因子集中度时，优先调用确定性脚本 [`scripts/invest_tool.py`](scripts/invest_tool.py)。
+1. **每个数字都有出处。** 股价、市值、财报数字、业绩会原文只取自本会话的检索结果、API/MCP 工具或用户材料，并在数字旁标注来源（如 `[披露易 2026 中报 p.45]`、`[用户提供]`）。原因：你的训练记忆中的财务数据已过时且可能混淆，投资判断建在错误数字上代价极高。查不到的字段写 `N/A（原因）`；训练记忆里的数字只能作为"待核验线索"出现，不进入脚本和结论。
+2. **给尺子，不下指令。** 输出结构化事实、隐含假设、条件式价格标尺（"若隐含增速 ≤ X%，对应价格区间 Y"）和 Kill Criteria。买卖动作留给用户。原因：你不知道用户的仓位、成本、风险承受力，而决策责任在用户。
+3. **计算交给脚本。** DCF、逆向 DCF、敏感性矩阵、HHI、因子集中度一律调用 [`scripts/invest_tool.py`](scripts/invest_tool.py)。原因：多步复利与二分求解靠心算容易出错，且结果无法复现。
+4. **反证与正证同等用力。** 用户的看多语气越确定，越要认真找反证。用户反驳某条 Kill Criteria 时，只有新证据才能让你修改它。
 
----
-
-## 模块路由（按需单点调用 vs 全流程串联）
+## 模块路由
 
 **与 `stock-analysis` 的边界**：普通的估值、财报解读、买入区间与目标价请求由 `stock-analysis` 处理。本 Skill 只在用户点名 `invest-workflow` / ARTi，或要求决策留档与复盘、Kill Criteria 证伪、持仓伪分散体检时触发，避免两个 Skill 同时加载。
 
-根据用户指令路由到对应模块；仅当用户要求“完整分析 / 跑一遍 ARTi / 建档留存”时串联执行 **1 → 6 → 7**。详细检查清单与输出模板见 [`references/playbooks.md`](references/playbooks.md)。
+执行任一模块前，先读 [`references/playbooks.md`](references/playbooks.md) 的对应章节，按其清单完成。单点请求只跑对应模块；用户要求"完整分析 / 跑一遍 ARTi / 建档"时，按下方 ARTi 流程串联。
 
-| 模块编号 | 对应原 Skill | 触发场景 | 核心动作与边界 |
-| :--- | :--- | :--- | :--- |
-| **1. `quote`** | **Stock Market Pro**<br>（查行情） | 查报价、区间涨跌、K线位置、异动归因 | 核对市场与代码后缀（`.SS`/`.SZ`/`.HK`/美股），标注价格时间戳与复权口径，给出 52 周分位、关键均线/成交量异动及对应事件。**省切换时间，不看图编故事。** |
-| **2. `fundamentals`** | **Longbridge Fundamentals**<br>（翻财报） | 提炼三大表核心指标、初筛基本面 | 提取营收、经营利润、自由现金流（FCF）、ROE、净负债；强制执行**附注排雷检查**（应收/存货背离、非经常性损益、SBC 股权激励占比）。**管筛选，不管判断；圈出异常点供回查原表。** |
-| **3. `earnings`** | **Earnings Analysis**<br>（拆业绩会） | 拆解业绩会纪要、高管表态与指引 | 将管理层官话与财务数据对齐，强制执行两项动作：① **跨期指引 Diff**（上季承诺 vs 本季兑现，风险提示删改对比）；② **Q&A 答非所问检测**（列出分析师追问的具体数字与管理层绕开的话术）。 |
-| **4. `dcf`** | **DCF Valuation**<br>（算估值） | 算现金流折现、看当前股价贵不贵 | 调用 [`scripts/invest_tool.py dcf`](scripts/invest_tool.py) 同时运行**正向 DCF** 与**逆向 DCF（Reverse DCF）**：反推当前股价隐含的未来 5 年 FCF 复合增速，并输出 5×5（WACC × 增速）敏感性矩阵。**当尺子用，别当价格用。** |
-| **5. `diversification`** | **Diversification**<br>（看持仓结构） | 组合体检、查行业与风格集中度 | 调用 [`scripts/invest_tool.py portfolio`](scripts/invest_tool.py) 计算持仓 HHI、有效持仓数（$N_{\text{eff}}$）、表观行业权重，以及**底层风险因子重叠度**（识别跨行业但同押单一宏观叙事的隐形集中）。 |
-| **6. `stress-test`** | **Audit Investment Thesis**<br>（唱反调 / 证伪） | 下单前泼冷水、持仓逻辑压力测试 | 拆出 2~3 个承重墙假设，执行**事前验尸（Pre-mortem：假设 12 个月后亏损 30%）**，从报表质量、同行交叉证伪、估值杀跌三个维度挑刺，并给出 **3 条可观测、可量化的认错信号（Kill Criteria）**。 |
-| **7. `arti`** | **ARTi**<br>（串流程与留档） | 全流程投研组装、写入/复盘决策日志 | 串联前序模块，在估值（模块 4）与证伪（模块 6）后设置**人工确认点**（请用户确认核心假设），最后调用 [`scripts/invest_tool.py journal`](scripts/invest_tool.py) 将“核心假设 + 逆向 DCF 隐含预期 + Kill Criteria”归档至本地 Markdown，供日后复盘对照。 |
+| 模块 | 触发场景 | 脚本 |
+| :--- | :--- | :--- |
+| 1 `quote` 查行情 | 报价、区间涨跌、K 线位置、异动归因 | — |
+| 2 `fundamentals` 翻财报 | 三大表核心指标、附注排雷 | — |
+| 3 `earnings` 拆业绩会 | 管理层表态、指引兑现、Q&A 回避 | — |
+| 4 `dcf` 算估值 | 正向 / 逆向 DCF、股价隐含预期 | `dcf` |
+| 5 `diversification` 看持仓 | 行业集中度、底层因子伪分散 | `portfolio` |
+| 6 `stress-test` 证伪 | 承重墙假设、事前验尸、Kill Criteria | — |
+| 7 `arti` 串流程与留档 | 全流程建档、历史留档复盘 | `journal` |
 
----
+## ARTi 全流程
 
-## 确定性计算脚本用法 (`scripts/invest_tool.py`)
+复制以下清单到回复中，并逐项勾选：
 
-脚本仅依赖 Python 标准库，跨平台可直接运行（将 `<SKILL_DIR>` 替换为当前 Skill 所在目录）：
-
-### 1. 正向 DCF + 逆向 DCF + 敏感性矩阵
-```bash
-python "<SKILL_DIR>/scripts/invest_tool.py" dcf \
-  --price 135.0 \
-  --shares 24.5 \
-  --fcf 60.0 \
-  --net-debt -25.0 \
-  --wacc 0.095 \
-  --term-growth 0.03 \
-  --growth-rate 0.22 \
-  --years 5
-```
-* 输出：当前市值与企业价值（EV）、当前股价隐含的 5 年 FCF 复合增速（Reverse DCF）、给定增速下的每股内在价值、以及 WACC × 增长率 5×5 估值标尺表。
-
-### 2. 持仓结构与底层风险因子体检
-```bash
-python "<SKILL_DIR>/scripts/invest_tool.py" portfolio \
-  --holdings "NVDA:25:半导体:AI资本开支,CEG:15:公用事业:AI资本开支,VRT:15:工业设备:AI资本开支,AAPL:25:消费电子:终端换机,BRK.B:20:金融保险:美国内需"
-```
-* 格式：`代码:权重:表面行业:底层驱动因子`（权重自动归一化）。
-* 输出：Top 集中度、有效持仓数 $N_{\text{eff}}$、表面行业分布 vs 底层驱动因子真实暴露对比，自动标红 `>30%` 的单一因子隐形重仓。
-
-### 3. ARTi 决策日志归档与复盘
-```bash
-python "<SKILL_DIR>/scripts/invest_tool.py" journal \
-  --dir "~/decision-journal" \
-  --ticker "NVDA" \
-  --price 135.0 \
-  --implied-cagr "24.8%" \
-  --assumptions "1. 云厂商CapEx维持20%+增长; 2. 数据中心毛利率守住72%+" \
-  --kill-criteria "1. 单季数据中心毛利率跌破70%; 2. 前三大云厂下调明年CapEx指引; 3. 应收账款周转天数连续两季跳升>15天"
+```text
+ARTi 进度：
+- [ ] 1 quote：价格、52 周分位、异动事件（带时间戳）
+- [ ] 2 fundamentals：核心指标 + 附注疑点及回查位置
+- [ ] 3 earnings：原文摘录 → 指引 Diff → 回避矩阵（无纪要则标 N/A）
+- [ ] 4 dcf：脚本输出 + 输出检查通过
+- [ ] 5 diversification：仅当用户提供了持仓
+- [ ] 6 stress-test：2~3 条承重墙假设 + 3 条 Kill Criteria
+- [ ] 人工确认点：等待用户确认假设与 Kill Criteria
+- [ ] 7 journal：脚本写入成功，回报文件路径
 ```
 
----
+- **并行取数**：步骤 1~3 所需的行情、财报、纪要互不依赖，同时检索。
+- **人工确认点**：完成步骤 6 后结束本轮回复。列出待确认的承重墙假设、逆向 DCF 隐含增速和 Kill Criteria，请用户确认或修改。收到确认后才调用 `journal`。用户在请求中已明确"直接留档"时，可跳过等待。
+- **复盘**：用户要求复盘或提供历史留档时，按 playbooks 模块 7 的复盘流程执行。
 
-## 执行纪律
+## 脚本用法
 
-1. **先报数据口径**：每次输出顶部用一行注明：`标的 | 市场与币种 | 数据截止日 | 财报期 | 复权/会计口径（GAAP/Non-GAAP）`。
-2. **禁止堆砌表格废话**：表格呈现完数字后，正文只写**因果机制、背离点、需要回看原始财报哪一章节（如 Note X）**。
-3. **强制反方视角**：凡是跑全流程（`arti`）或估值分析（`dcf`），结尾必须附带模块 6 的 **3 条可量化 Kill Criteria**，不留无条件看多的尾巴。
+脚本只依赖 Python 3 标准库。命令写成单行，可同时用于 PowerShell 和 Bash。将 `<SKILL_DIR>` 替换为本 Skill 目录。完整参数见 `python "<SKILL_DIR>/scripts/invest_tool.py" <子命令> --help`。
+
+**dcf**：正向 DCF + 逆向 DCF 隐含增速 + 5×5（WACC × 增速）敏感性矩阵。
+
+```bash
+python "<SKILL_DIR>/scripts/invest_tool.py" dcf --price 135.0 --shares 24.5 --fcf 60.0 --net-debt -25.0 --wacc 0.095 --term-growth 0.03 --growth-rate 0.22 --years 5
+```
+
+- `--price` 与 `--fcf`、`--net-debt` 必须同币种；`--shares` 与 `--fcf` 必须同数量级（如都用"亿"）。
+- `--fcf` 必须为正。当期 FCF ≤ 0 时，按 playbooks 模块 4 构造归一化稳态 FCF，并在输出中注明。
+
+**portfolio**：HHI、有效持仓数 N_eff、表面行业 vs 底层因子暴露，单一因子 >30% 时预警。
+
+```bash
+python "<SKILL_DIR>/scripts/invest_tool.py" portfolio --holdings "NVDA:25:半导体:AI资本开支,CEG:15:公用事业:AI资本开支,AAPL:25:消费电子:终端换机"
+```
+
+- 格式：`代码:权重:表面行业:底层驱动因子`，逗号分隔，权重自动归一化。
+
+**journal**：把核心假设、逆向 DCF 隐含增速、Kill Criteria 写入 `<dir>/<TICKER>-<日期>.md`。`--dir` 默认为 `~/decision-journal`，通常不必传。
+
+```bash
+python "<SKILL_DIR>/scripts/invest_tool.py" journal --dir "~/decision-journal" --ticker "NVDA" --price 135.0 --implied-cagr "24.8%" --action "观察 / 建档" --assumptions "云厂商CapEx维持20%+增长; 数据中心毛利率守住72%+" --kill-criteria "单季数据中心毛利率跌破70%; 前三大云厂下调明年CapEx指引; 应收账款周转天数连续两季跳升>15天"
+```
+
+- 多条假设或 Kill Criteria 用英文分号 `;` 分隔。同一标的同一天重复写入会覆盖原文件。
+
+**脚本输出检查**（每次运行 `dcf` 后执行）：
+
+1. 脚本报错 `outside the solvable range`（股价超出 -50%~200% 增速对应的价值区间）→ 先查单位和币种，修正后重跑。
+2. 终值占 EV 比例 >75% → 在正文提示结论对远期假设高度敏感。
+3. 隐含增速与公司近 3 年 FCF 增速相差悬殊 → 先复核输入，再解读为市场预期。
+
+## 输出格式
+
+1. **首行口径**：`标的 | 市场与币种 | 数据截止日 | 财报期 | 复权与会计口径（GAAP/Non-GAAP 或 IFRS/Non-IFRS）`。
+2. **表格放数字，正文写机制。** 表格之后用短段落写因果机制、背离点和需回查的原始章节（如 Note X）。
+3. **收尾附 Kill Criteria。** `dcf` 和 `arti` 的输出结尾附模块 6 的 3 条 Kill Criteria。
