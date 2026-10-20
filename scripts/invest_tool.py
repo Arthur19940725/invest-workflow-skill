@@ -16,6 +16,11 @@ import pathlib
 import sys
 from typing import Dict, List, Tuple
 
+# Single-factor exposure above this weight triggers a concentration warning (see SKILL.md / playbooks.md).
+FACTOR_WARN_THRESHOLD = 0.30
+# Implied FCF CAGR search bounds for the reverse DCF.
+REVERSE_DCF_G_LOW, REVERSE_DCF_G_HIGH = -0.50, 2.00
+
 
 def calc_equity_value_per_share(
     fcf: float,
@@ -62,7 +67,14 @@ def solve_reverse_dcf(
     shares: float,
 ) -> float:
     """Binary search for the implied annual FCF growth rate matching target_price."""
-    low, high = -0.50, 2.00
+    low, high = REVERSE_DCF_G_LOW, REVERSE_DCF_G_HIGH
+    val_low, _, _ = calc_equity_value_per_share(fcf, low, wacc, term_growth, years, net_debt, shares)
+    val_high, _, _ = calc_equity_value_per_share(fcf, high, wacc, term_growth, years, net_debt, shares)
+    if not val_low <= target_price <= val_high:
+        raise ValueError(
+            f"Price {target_price:.2f} is outside the solvable range [{val_low:.2f}, {val_high:.2f}] "
+            f"for implied growth in [{low:.0%}, {high:.0%}]; check FCF, shares, and net debt units."
+        )
     for _ in range(80):
         mid = (low + high) / 2.0
         val, _, _ = calc_equity_value_per_share(fcf, mid, wacc, term_growth, years, net_debt, shares)
@@ -78,26 +90,30 @@ def cmd_dcf(args: argparse.Namespace) -> int:
         print("Error: Base FCF (--fcf) must be positive for standard DCF/Reverse-DCF.", file=sys.stderr)
         return 1
 
-    implied_g = solve_reverse_dcf(
-        target_price=args.price,
-        fcf=args.fcf,
-        wacc=args.wacc,
-        term_growth=args.term_growth,
-        years=args.years,
-        net_debt=args.net_debt,
-        shares=args.shares,
-    )
+    try:
+        implied_g = solve_reverse_dcf(
+            target_price=args.price,
+            fcf=args.fcf,
+            wacc=args.wacc,
+            term_growth=args.term_growth,
+            years=args.years,
+            net_debt=args.net_debt,
+            shares=args.shares,
+        )
 
-    base_g = args.growth_rate if args.growth_rate is not None else implied_g
-    fair_price, ev, tv_weight = calc_equity_value_per_share(
-        fcf=args.fcf,
-        growth_rate=base_g,
-        wacc=args.wacc,
-        term_growth=args.term_growth,
-        years=args.years,
-        net_debt=args.net_debt,
-        shares=args.shares,
-    )
+        base_g = args.growth_rate if args.growth_rate is not None else implied_g
+        fair_price, ev, tv_weight = calc_equity_value_per_share(
+            fcf=args.fcf,
+            growth_rate=base_g,
+            wacc=args.wacc,
+            term_growth=args.term_growth,
+            years=args.years,
+            net_debt=args.net_debt,
+            shares=args.shares,
+        )
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
     market_cap = args.price * args.shares
     current_ev = market_cap + args.net_debt
     upside = (fair_price - args.price) / args.price if args.price > 0 else float("nan")
@@ -199,10 +215,10 @@ def cmd_portfolio(args: argparse.Namespace) -> int:
     for f, items in sorted(factor_map.items(), key=lambda kv: sum(x[1] for x in kv[1]), reverse=True):
         fw = sum(x[1] for x in items)
         distinct_sectors = len({s for _, _, s in items})
-        if fw >= 0.35 and distinct_sectors >= 2:
+        if fw > FACTOR_WARN_THRESHOLD and distinct_sectors >= 2:
             status = "⚠️ **伪分散预警（跨行业同押单一因子）**"
-        elif fw >= 0.35:
-            status = "⚠️ **单一因子重仓 (>35%)**"
+        elif fw > FACTOR_WARN_THRESHOLD:
+            status = f"⚠️ **单一因子重仓 (>{FACTOR_WARN_THRESHOLD:.0%})**"
         else:
             status = "✅ 正常"
         detail_str = ", ".join(f"{t}[{s} {w:.1%}]" for t, w, s in items)
