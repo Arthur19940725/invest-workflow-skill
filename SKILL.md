@@ -1,6 +1,6 @@
 ---
 name: invest-workflow
-description: "Use when the user asks to check stock quotes/K-lines (Stock Market Pro / 查行情), screen financial statements (Longbridge Fundamentals / 翻财报), dissect earnings calls (Earnings Analysis / 拆业绩会), run DCF or Reverse-DCF valuation (DCF Valuation / 算估值), audit portfolio concentration and factor overlap (Diversification / 看持仓结构), stress-test an investment thesis with pre-mortem Kill Criteria (Audit Investment Thesis / 唱反调证伪), or run the end-to-end ARTi research workflow and decision journal (ARTi / 投研流程与复盘留档)."
+description: "Use only when the user explicitly invokes invest-workflow or ARTi, or asks to archive or review an investment decision journal (建档留存 / 复盘留档), stress-test a thesis with pre-mortem Kill Criteria (唱反调证伪), or audit a portfolio for hidden single-factor concentration (伪分散 / 底层驱动因子穿透). Its modules also cover quotes, fundamentals, earnings calls, and Reverse-DCF, but general stock research, valuation, earnings, and price-zone questions belong to stock-analysis."
 ---
 
 # Invest Workflow (ARTi 7-in-1 投研工作流)
@@ -16,6 +16,8 @@ description: "Use when the user asks to check stock quotes/K-lines (Stock Market
 ---
 
 ## 模块路由（按需单点调用 vs 全流程串联）
+
+**与 `stock-analysis` 的边界**：普通的估值、财报解读、买入区间与目标价请求由 `stock-analysis` 处理。本 Skill 只在用户点名 `invest-workflow` / ARTi，或要求决策留档与复盘、Kill Criteria 证伪、持仓伪分散体检时触发，避免两个 Skill 同时加载。
 
 根据用户指令路由到对应模块；仅当用户要求“完整分析 / 跑一遍 ARTi / 建档留存”时串联执行 **1 → 6 → 7**。详细检查清单与输出模板见 [`references/playbooks.md`](references/playbooks.md)。
 
@@ -60,7 +62,7 @@ python "<SKILL_DIR>/scripts/invest_tool.py" portfolio \
 ### 3. ARTi 决策日志归档与复盘
 ```bash
 python "<SKILL_DIR>/scripts/invest_tool.py" journal \
-  --dir "./decision-journal" \
+  --dir "~/decision-journal" \
   --ticker "NVDA" \
   --price 135.0 \
   --implied-cagr "24.8%" \

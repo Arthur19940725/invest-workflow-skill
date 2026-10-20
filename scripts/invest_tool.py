@@ -4,17 +4,19 @@ Deterministic calculation and journaling helper for the invest-workflow skill.
 Provides:
   1. dcf       - Forward DCF, Reverse DCF (implied 5-year FCF CAGR), and 5x5 sensitivity matrix
   2. portfolio - Portfolio concentration (HHI, N_eff), sector breakdown, and underlying factor overlap
-  3. journal   - Decision Journal creation and append for ARTi workflow archival
+  3. journal   - Decision Journal creation for ARTi workflow archival (see invest_journal.py)
 """
 
 from __future__ import annotations
 
 import argparse
-import datetime as dt
-import math
 import pathlib
 import sys
 from typing import Dict, List, Tuple
+
+# `python -I` drops the script directory from sys.path; restore it for the sibling module.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from invest_journal import DEFAULT_JOURNAL_DIR, cmd_journal  # noqa: E402
 
 # Single-factor exposure above this weight triggers a concentration warning (see SKILL.md / playbooks.md).
 FACTOR_WARN_THRESHOLD = 0.30
@@ -227,62 +229,6 @@ def cmd_portfolio(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_journal(args: argparse.Namespace) -> int:
-    out_dir = pathlib.Path(args.dir).expanduser().resolve()
-    out_dir.mkdir(parents=True, exist_ok=True)
-    date_str = args.date or dt.date.today().isoformat()
-    safe_ticker = args.ticker.upper().replace("/", "-")
-    file_path = out_dir / f"{safe_ticker}-{date_str}.md"
-
-    assumptions_items = [a.strip() for a in args.assumptions.split(";") if a.strip()]
-    kill_items = [k.strip() for k in args.kill_criteria.split(";") if k.strip()]
-
-    lines = [
-        "---",
-        f'ticker: "{safe_ticker}"',
-        f'date: "{date_str}"',
-        f"entry_price: {args.price}",
-        f'implied_5y_fcf_cagr: "{args.implied_cagr}"',
-        'status: "active"',
-        "---",
-        "",
-        f"# ARTi 投研决策留档：{safe_ticker} ({date_str})",
-        "",
-        "## 1. 决策快照",
-        f"- **记录时点价格**: `{args.price}`",
-        f"- **逆向 DCF 隐含 5 年 FCF 增速**: `{args.implied_cagr}`",
-        f"- **持仓动作与仓位**: {args.action}",
-        "",
-        "## 2. 承重墙假设（Load-Bearing Assumptions）",
-    ]
-    for idx, item in enumerate(assumptions_items, 1):
-        lines.append(f"- [ ] **假设 {idx}**: {item}")
-
-    lines.extend(
-        [
-            "",
-            "## 3. 反方证伪与认错信号（Kill Criteria — 触发即复盘离场）",
-        ]
-    )
-    for idx, item in enumerate(kill_items, 1):
-        lines.append(f"- [ ] **认错阈值 {idx}**: {item}")
-
-    lines.extend(
-        [
-            "",
-            "## 4. 事后复盘记录（Review Log）",
-            "| 复盘日期 | 当时股价 | 原假设状态（维持/证伪） | 是否触发 Kill Criteria | 复盘结论与动作 |",
-            "| :--- | :--- | :--- | :--- | :--- |",
-            f"| {date_str} | `{args.price}` | 初始建档 | 否 | 初始归档留存 |",
-            "",
-        ]
-    )
-
-    file_path.write_text("\n".join(lines), encoding="utf-8")
-    print(f"Decision journal saved to: {file_path}")
-    return 0
-
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Invest Workflow (ARTi 7-in-1) Deterministic Helper")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -308,7 +254,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_port.set_defaults(func=cmd_portfolio)
 
     p_journal = sub.add_parser("journal", help="Save an ARTi Decision Journal entry")
-    p_journal.add_argument("--dir", type=str, default="./decision-journal", help="Directory to store journal files")
+    p_journal.add_argument("--dir", type=str, default=DEFAULT_JOURNAL_DIR, help="Directory to store journal files")
     p_journal.add_argument("--ticker", type=str, required=True, help="Ticker symbol")
     p_journal.add_argument("--price", type=float, required=True, help="Current stock price at decision time")
     p_journal.add_argument("--implied-cagr", type=str, required=True, help="Implied FCF CAGR from Reverse DCF")

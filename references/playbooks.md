@@ -90,6 +90,6 @@
 1. **新标的研究建档流**：
    `行情位置 (1)` $\rightarrow$ `财报初筛与附注疑点 (2)` $\rightarrow$ `业绩会言行比对 (3)` $\rightarrow$ `逆向 DCF 估值标尺 (4)` $\rightarrow$ `组合因子冲突检查 (5)` $\rightarrow$ `反方挑刺与 Kill Criteria (6)` $\rightarrow$ **人工确认核心假设** $\rightarrow$ `写入 Decision Journal (7)`。
 2. **历史留档复盘流（当用户提供过往留档或要求复盘时）**：
-   - 读取 `decision-journal/` 下对应标的的历史快照。
+   - 读取 `~/decision-journal/`（`journal --dir` 的默认目录）下对应标的的历史快照。
    - 逐条核对：**当初的承重墙假设是否依然成立？3 条 Kill Criteria 是否已触发？**
    - 识别“逻辑漂移（Thesis Creep）”：提醒用户不要把“做错了短线交易”美化成“长线价值投资”，也不要因为股价上涨就忽略已经恶化的原始假设。
