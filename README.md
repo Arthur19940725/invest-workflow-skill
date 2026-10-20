@@ -95,7 +95,7 @@ python scripts/invest_tool.py portfolio \
 
 ```bash
 python scripts/invest_tool.py journal \
-  --dir "./decision-journal" \
+  --dir "~/decision-journal" \
   --ticker "00100.HK" \
   --price 182.10 \
   --implied-cagr "33.21%" \
@@ -128,7 +128,8 @@ python -I -B scripts/test_invest_tool.py -v
 ├── references/
 │   └── playbooks.md              # 7 个子模块的标准化检查清单与实战手册
 └── scripts/
-    ├── invest_tool.py            # 确定性计算与决策日志脚本（DCF / Portfolio / Journal）
+    ├── invest_tool.py            # 确定性计算与 CLI 入口（DCF / Portfolio / Journal）
+    ├── invest_journal.py         # 决策日志归档（默认写入 ~/decision-journal）
     └── test_invest_tool.py       # 标准库单元测试套件
 ```
 

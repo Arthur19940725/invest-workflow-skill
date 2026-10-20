@@ -156,6 +156,11 @@ class InvestToolTests(unittest.TestCase):
         self.assertIn("单一因子重仓 (>30%)", rows["**F1**"])
         self.assertIn("✅ 正常", rows["**F2**"])
 
+    def test_journal_default_dir_is_under_home_not_cwd(self):
+        argv = "journal --ticker NVDA --price 135 --implied-cagr 24.8% --assumptions a --kill-criteria k".split()
+        args = MODULE.build_parser().parse_args(argv)
+        self.assertEqual(Path(args.dir).expanduser(), Path.home() / "decision-journal")
+
     def test_cmd_journal_creates_markdown_entry(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             args = argparse.Namespace(
