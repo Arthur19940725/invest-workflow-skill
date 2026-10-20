@@ -115,6 +115,47 @@ class InvestToolTests(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("Invalid holding format", stderr.getvalue())
 
+    def test_solve_reverse_dcf_raises_when_price_outside_search_range(self):
+        with self.assertRaisesRegex(ValueError, "outside the solvable range"):
+            MODULE.solve_reverse_dcf(
+                target_price=1_000_000.0,
+                fcf=60.0,
+                wacc=0.095,
+                term_growth=0.03,
+                years=5,
+                net_debt=-25.0,
+                shares=24.5,
+            )
+
+    def test_cmd_dcf_rejects_price_outside_search_range(self):
+        args = argparse.Namespace(
+            price=1_000_000.0,
+            shares=24.5,
+            fcf=60.0,
+            net_debt=-25.0,
+            wacc=0.095,
+            term_growth=0.03,
+            growth_rate=None,
+            years=5,
+        )
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            rc = MODULE.cmd_dcf(args)
+        self.assertEqual(rc, 1)
+        self.assertIn("outside the solvable range", stderr.getvalue())
+        self.assertEqual(stdout.getvalue(), "")
+
+    def test_cmd_portfolio_flags_single_factor_above_30_percent(self):
+        args = argparse.Namespace(holdings="AAA:32:半导体:F1,BBB:28:能源:F2,CCC:20:医药:F3,DDD:20:银行:F4")
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            rc = MODULE.cmd_portfolio(args)
+        self.assertEqual(rc, 0)
+        rows = {line.split("|")[1].strip(): line for line in stdout.getvalue().splitlines() if line.startswith("| **F")}
+        self.assertIn("单一因子重仓 (>30%)", rows["**F1**"])
+        self.assertIn("✅ 正常", rows["**F2**"])
+
     def test_cmd_journal_creates_markdown_entry(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             args = argparse.Namespace(
